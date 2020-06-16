@@ -4,5 +4,4 @@
 */__pycache__/
 __init__.py
 __pycache__/
-*.ipynb
 .ipynb_checkpoints
