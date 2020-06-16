@@ -232,7 +232,5 @@ class Inpaint(nn.Module):
 
 			tensorDisparity *= self.tensorStd[1] + 0.0000001
 			tensorDisparity += self.tensorMean[1]
-
-			# self.tensorMean, self.tensorStd = None, None
 		
 		return tensorImage, tensorDisparity

@@ -22,8 +22,6 @@ class Basic(nn.Module):
 				nn.Conv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1)
 			)
 
-		# end
-
 		if intChannels[0] == intChannels[2]:
 			self.moduleShortcut = None
 
@@ -125,7 +123,6 @@ class Refine(nn.Module):
 		tensorRefine *= tensorStd[1] + 0.0000001
 		tensorRefine += tensorMean[1]
 
-		# return F.threshold(input=tensorRefine, threshold=0.0, value=0.0)
 		return tensorRefine
 	# end
 # end

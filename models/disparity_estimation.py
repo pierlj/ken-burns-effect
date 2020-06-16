@@ -193,8 +193,6 @@ class Disparity(nn.Module):
 				tensorColumn[intRow] += tensorUp
 			# end
 		# end
-
-		# return F.threshold(input=self.moduleDisparity(tensorColumn[0]), threshold=0.0, value=0.0)
 		return self.moduleDisparity(tensorColumn[0])
 	# end
 # end

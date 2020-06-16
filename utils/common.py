@@ -1,12 +1,13 @@
-import torch
-import cupy
-import numpy as np
-import re
 import os
-import cv2
+import re
 
-from models.disparity_estimation import Semantics, Disparity
+import cupy
+import cv2
+import numpy as np
+import torch
+
 from models.disparity_adjustment import disparity_adjustment
+from models.disparity_estimation import Disparity, Semantics
 from models.disparity_refinement import Refine
 
 cuda = torch.cuda.is_available()
@@ -129,19 +130,15 @@ def process_autozoom(objectSettings, objectCommon):
 			dblShiftV = numpyShiftV[intU, intV].item()
 
 			if objectSettings['objectFrom']['dblCenterU'] + dblShiftU < dblCropWidth / 2.0:
-				# print(1)
 				continue
 
 			elif objectSettings['objectFrom']['dblCenterU'] + dblShiftU > objectCommon['intWidth'] - (dblCropWidth / 2.0):
-				# print(2)
 				continue
 
 			elif objectSettings['objectFrom']['dblCenterV'] + dblShiftV < dblCropHeight / 2.0:
-				# print(3)
 				continue
 
 			elif objectSettings['objectFrom']['dblCenterV'] + dblShiftV > objectCommon['intHeight'] - (dblCropHeight / 2.0):
-				# print(4)
 				continue
 
 			# end
@@ -153,8 +150,6 @@ def process_autozoom(objectSettings, objectCommon):
 				'dblDepthFrom': dblDepthFrom,
 				'dblDepthTo': dblDepthTo
 			})[0]
-
-			# print(tensorPoints.size())
 
 			tensorRender, tensorExisting = render_pointcloud(tensorPoints, objectCommon['tensorRawImage'].view(1, 3, -1), objectCommon['intWidth'], objectCommon['intHeight'], objectCommon['dblFocal'], objectCommon['dblBaseline'])
 
@@ -182,7 +177,7 @@ def process_kenburns(objectSettings, objectCommon, moduleInpaint):
 		objectCommon['tensorInpaDisparity'] = objectCommon['tensorRawDisparity'].view(1, 1, -1)
 		objectCommon['tensorInpaDepth'] = objectCommon['tensorRawDepth'].view(1, 1, -1)
 		objectCommon['tensorInpaPoints'] = objectCommon['tensorRawPoints'].view(1, 3, -1)
-		# print("in", objectCommon['tensorInpaImage'].size())
+
 		for dblStep in [ 0.0, 1.0 ]:
 			dblFrom = 1.0 - dblStep
 			dblTo = 1.0 - dblFrom
@@ -253,7 +248,7 @@ def process_kenburns(objectSettings, objectCommon, moduleInpaint):
 														objectCommon['intHeight'], 
 														currentFocal, 
 														objectCommon['dblBaseline'])
-		# print(tensorRender.size())
+
 		tensorRender = fill_disocclusion(tensorRender, tensorRender[:, 3:4, :, :] * (tensorExisting > 0.0).float())
 
 		numpyOutput = (tensorRender[0, 0:3, :, :].detach().cpu().numpy().transpose(1, 2, 0) * 255.0).clip(0.0, 255.0).astype(np.uint8)
@@ -689,7 +684,7 @@ def render_pointcloud(tensorInput, tensorData, intWidth, intHeight, dblFocal, db
 
 	return tensorOutput[:, :-1, :, :] / (tensorOutput[:, -1:, :, :] + 0.0000001), tensorOutput[:, -1:, :, :].detach().clone()
 
-
+# CUDA kernel to generate disocclusion mask from one view (modified Z-buffer)
 def generate_mask(tensorInput, tensorShift, intWidth, intHeight, dblFocal, dblBaseline):
 	tensorInput = tensorInput + tensorShift
 

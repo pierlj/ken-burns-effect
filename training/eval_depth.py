@@ -16,8 +16,8 @@ from utils.utils import (CustomWriter, compute_metrics, device, load_models,
 
 
 class DepthEval():
-    def __init__(self, dataset_paths, model_paths, eval_refine=False, eval_pretrained=False, perform_adjustment=True, evaluation_path=None):
-        self.dataset = Dataset(dataset_paths)
+    def __init__(self, dataset_paths, model_paths, eval_refine=False, eval_pretrained=False, perform_adjustment=True, evaluation_path=None, imagenet_path=None):
+        self.dataset = Dataset(dataset_paths, imagenet_path=imagenet_path)
         self.dataset.mode = 'eval'
         self.dataset.padding = True
         self.data_loader = self.dataset.get_dataloader(batch_size=1)
@@ -43,7 +43,7 @@ class DepthEval():
 
     
     def eval(self):
-        
+        # compute the metrics on the provided dataset with the provided networks
         measures = []
 
         metrics = {}
@@ -53,9 +53,6 @@ class DepthEval():
         print('Starting evaluation on datasets: ', functools.reduce(lambda s1, s2: s1['path'] + ', ' + s2['path'], self.dataset_paths))
 
         for idx, (tensorImage, disparities, masks, imageNetTensor, dataset_ids) in enumerate(tqdm(self.data_loader)):
-
-            # if (idx +1)%100 == 0:
-            #     break
             tensorImage = tensorImage.to(device, non_blocking=True)
             disparities = disparities.to(device, non_blocking=True)
             masks = masks.to(device, non_blocking=True)
@@ -67,36 +64,9 @@ class DepthEval():
 
             tensorResized = resize_image(tensorImage)
 
-            # # retrieve parameters for different sets of images
-            # tensorFocal = torch.Tensor([self.dataset_paths[int(id.item())]['params']['focal'] for id in dataset_ids])
-            # tensorBaseline = torch.Tensor([self.dataset_paths[int(id.item())]['params']['baseline'] for id in dataset_ids])
-            # tensorFocal = tensorFocal.view(-1,1).repeat(1, 1, tensorImage.size(2) * tensorImage.size(3)).view(*GTdepth.size())
-            # tensorBaseline = tensorBaseline.view(-1,1).repeat(1, 1, tensorImage.size(2) * tensorImage.size(3)).view(*GTdepth.size())
-
-            # tensorBaseline = tensorBaseline.to(device)
-            # tensorFocal = tensorFocal.to(device)
-
             tensorDisparity = self.moduleDisparity(tensorResized, self.moduleSemantics(tensorResized))  # depth estimation
-
-
-            # objectPredictions = self.moduleMaskrcnn(tensorImage) # segment image in mask using Mask-RCNN
-            # if self.perform_adjustment:
-            #     tensorDisparity = torch.cat(list(map(lambda i: disparity_adjustment(tensorImage[i], tensorDisparity[i], objectPredictions[i]), 
-            #                                         np.arange(tensorImage.size(0)))))
-
-
             tensorDisparity = self.moduleRefine(tensorImage, tensorDisparity) # increase resolution
-
-            # tensorDisparity = tensorDisparity / tensorDisparity.max() # normalize disparities
-            # print(tensorDisparity.mean(), tensorDisparity.std(), tensorDisparity.min(), tensorDisparity.max())
-            # print(torch.sum(tensorDisparity < 0.0 ))
             tensorDisparity = F.threshold(tensorDisparity, threshold=0.0, value=0.0)
-            # tensorDisparity = tensorDisparity
-            # disparities = disparities
-
-            # tensorDepth = (tensorFocal * tensorBaseline) / (tensorDisparity)
-            # tensorDepth = torch.clamp(tensorDepth, min=0)
-            # print(tensorDepth.min(), tensorDepth.max())
 
             masks = masks.clamp(0,1)
             measures.append(np.array(compute_metrics(tensorDisparity, disparities, masks)))
@@ -110,7 +80,7 @@ class DepthEval():
         return metrics
     
     def get_depths(self):
-
+        # return input images and predictions 
         def detach_tensor(tensor):
             return tensor.cpu().detach().numpy()
 
@@ -118,7 +88,6 @@ class DepthEval():
         tensorImage = tensorImage.to(device, non_blocking=True)
         disparities = disparities.to(device, non_blocking=True)
         masks = masks.to(device, non_blocking=True)
-        
 
         # pretrained networks from 3D KBE were trained with image normalized between 0 and 1
         if self.eval_pretrained:
@@ -140,17 +109,9 @@ class DepthEval():
 
         objectPredictions = self.moduleMaskrcnn(tensorImage) # segment image in mask using Mask-RCNN
 
-        # tensorDisparityAdjusted = torch.cat(list(map(lambda i: disparity_adjustment(tensorImage[i], tensorDisparity[i], objectPredictions[i]), 
-        #                                         np.arange(tensorImage.size(0)))))
-
         tensorDisparityAdjusted = tensorDisparity
         print(tensorImage.size())
         tensorDisparityRefined = self.moduleRefine(tensorImage[:2,:,:,:], tensorDisparityAdjusted[:2,:,:,:]) # increase resolution
-
-        # tensorDisparity = tensorDisparity / tensorDisparity.max() * tensorBaseline # normalize disparities
-        # print(tensorDisparity.mean(), tensorDisparity.std(), tensorDisparity.min(), tensorDisparity.max())
-
-        # tensorDepth = (tensorFocal * tensorBaseline) / (tensorDisparity + 1e-4)
 
         return (detach_tensor(tensorDisparity), 
                 detach_tensor(tensorDisparityAdjusted), 

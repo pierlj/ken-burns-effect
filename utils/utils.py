@@ -1,21 +1,23 @@
 import os
+
 import cv2
-import numpy as np
+import kornia
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-import kornia
-from torch.nn.utils.spectral_norm import spectral_norm, remove_spectral_norm
+from torch.nn.utils.spectral_norm import remove_spectral_norm, spectral_norm
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import models
 
-from utils.common import process_shift, render_pointcloud, depth_to_points, spatial_filter, generate_mask, fill_disocclusion
-
+from utils.common import (depth_to_points, fill_disocclusion, generate_mask,
+                          process_shift, render_pointcloud, spatial_filter)
 
 cuda = torch.cuda.is_available()
 device = "cuda:0" if cuda else "cpu"
 
+# Plotting function used to display image in a grid manner
 def plot_all(images, n_img = 1, n_rows = 3, figsize=(16,8)):
     grid_list = []
 
@@ -70,7 +72,7 @@ def resize_image(tensorImage, max_size=512):
 
     return tensorImage
 
-
+# Create kernels used for gradient computation
 def get_kernels(h):
     kernel_elements = [-1] + [0 for _ in range(h-1)] + [1]
     kernel_elements_div = [1] + [0 for _ in range(h-1)] + [1]
@@ -95,7 +97,6 @@ def derivative_scale(imageTensor, h, norm=True):
         diff_y = diff_y/(norm_y + 1e-7)
     
     return torch.nn.functional.pad(diff_x, (0, 0, h, 0)), torch.nn.functional.pad(diff_y, (h, 0, 0, 0))
-    # return diff_x, diff_y
 
 def weights_init(model, init_type='xavier', init_gain=1.4):
         def initialization(m):
@@ -112,8 +113,8 @@ def weights_init(model, init_type='xavier', init_gain=1.4):
         if init_type != 'None':
             model.apply(initialization)
 
+# Computation of depth estimation metrics 
 def compute_metrics(depth, depth_gt, masks):
-
     depth = depth * masks + 1e-7
     depth_gt = depth_gt * masks + 1e-7
     
@@ -134,6 +135,8 @@ def compute_metrics(depth, depth_gt, masks):
 
     return abs_rel.item(), sq_rel.item(), rmse.item(), rmse_log.item(), a1.item(), a2.item(), a3.item()
 
+
+# Computation of inpainting metrics
 def compute_inpaint_metrics(imageInpaint, disparityInpaint, imageGT, disparityGT, masks):
 
     def psnr(im1, im2, disp=False):
@@ -183,39 +186,6 @@ def spectral_norm_switch(model, on=True):
                 m = remove_spectral_norm(m)
 
 
-def alrc(loss, num_stddev=3, decay=0.999, mu1=25, mu2=30**2):
-    """Adaptive learning rate clipping (ALRC) of outlier losses.
-    
-    Inputs:
-        loss: Loss function to limit outlier losses of.
-        num_stddev: Number of standard deviation above loss mean to limit it
-        to.
-        decay: Decay rate for exponential moving averages used to track the first
-        two raw moments of the loss.
-        mu1_start: Initial estimate for the first raw moment of the loss.
-        mu2_start: Initial estimate for the second raw moment of the loss.
-        in_place_updates: If False, add control dependencies for moment tracking
-        to tf.GraphKeys.UPDATE_OPS. This allows the control dependencies to be
-        executed in parallel with other dependencies later.
-    Return:
-        Loss function with control dependencies for ALRC.
-
-    Adapted to pytorch from original code paper --> need to update running means
-    outside of this function
-    """
-
-    #Use capped loss for moment updates to limit the effect of outlier losses on the threshold
-    sigma = torch.sqrt(mu2 - mu1**2+1.e-8)
-    Lmax = mu1+num_stddev*sigma
-    Lmax = Lmax.detach()
-
-    loss = torch.where(loss < Lmax, 
-                   loss, 
-                   loss/(loss/Lmax))
- 
-    return loss
-
-
 
 def save_model(models_dict, nb_iter, path='models/trained'):
     
@@ -247,19 +217,7 @@ def load_models(models_list, models_paths, continue_training=False):
     return iter_nb
 
 
-def spectral_norm_switch(model, on=True):
-        if not model.spectral_norm and on:
-            model.spectral_norm = True
-            for m in model.modules():
-                if hasattr(m, 'weight') and 'Conv' in m.__class__.__name__:
-                    m = spectral_norm(m)
-        elif model.spectral_norm and not on:
-            model.spectral_norm = False
-            for m in model.modules():
-                if hasattr(m, 'weight') and 'Conv' in m.__class__.__name__:
-                    m = remove_spectral_norm(m)
-
-
+# Compute camera motion from zoom settings and a specific RGB-D image
 def get_tensor_shift(objectCommon):
     dblStep = 1
     dblFrom = 1.0 - dblStep
@@ -286,6 +244,7 @@ def get_tensor_shift(objectCommon):
 
     return tensorShift
 
+# Compute disocclusion mask from an image and its disparity maps and zoom settings
 def get_masks(tensorImage, tensorDisparity, tensorDepth, zoom_settings, camera, AFromB=True, tensorContext=None):
     masksList = []
     shiftList = []
@@ -340,7 +299,7 @@ def get_masks(tensorImage, tensorDisparity, tensorDepth, zoom_settings, camera, 
         tensorMasks = (tensorMasks > 0.0).float()
         return tensorRender, tensorMasks, tensorPoints.view(tensorImage.shape[0], 3, -1), tensorShift, objectList
     
-
+# Create halfway view C from view A and B
 def generate_new_view_from_inpaint(tensorPointsA, 
                                     tensorImageA, 
                                     tensorDisparityA, 
@@ -365,29 +324,6 @@ def generate_new_view_from_inpaint(tensorPointsA,
     maxLength = lengths.max()
     lengthA = tensorPointsA.shape[-1]
 
-    # tensorPoints = torch.ones(N,3,lengthA + maxLength) * 1e6  ## * 10^6 in order the padding points not to be rendered
-    # tensorImage = torch.ones(N,3,lengthA + maxLength)
-    # tensorDisparity = torch.zeros(N,1,lengthA + maxLength)
-    # tensorDepth = torch.ones(N,1,lengthA + maxLength) * 1e6
-
-    # tensorPoints = tensorPoints.to(device, non_blocking=True)
-    # tensorImage = tensorImage.to(device, non_blocking=True)
-    # tensorDisparity = tensorDisparity.to(device, non_blocking=True)
-    # tensorDepth = tensorDepth.to(device, non_blocking=True)
-
-
-    # tensorPoints[:,:,:lengthA] = tensorPointsA
-    # tensorImage[:,:,:lengthA] = tensorImageA.view(N,3,-1)
-    # tensorDisparity[:,:,:lengthA] = tensorDisparityA.view(N,1,-1)
-    # tensorDepth[:,:,:lengthA] = tensorDepthA.view(N,1,-1)
-
-
-    # for batch_id in range(N):
-    #     tensorPoints[batch_id,:,lengthA:lengthA+lengths[batch_id]] = tensorPointsB[batch_id].view(1, 3, -1)[tensorMaskB[batch_id].expand(-1, 3, -1)].view(1, 3, -1)
-    #     tensorImage[batch_id,:,lengthA:lengthA+lengths[batch_id]] = tensorImageB[batch_id].view(1, 3, -1)[tensorMaskB[batch_id].expand(-1, 3, -1)].view(1, 3, -1)
-    #     tensorDisparity[batch_id,:,lengthA:lengthA+lengths[batch_id]] = tensorDisparityB[batch_id].view(1, 1, -1)[tensorMaskB[batch_id].expand(-1, 1, -1)].view(1, 1, -1)
-    #     tensorDepth[batch_id,:,lengthA:lengthA+lengths[batch_id]] = tensorDepthB[batch_id].view(1, 1, -1)[tensorMaskB[batch_id].expand(-1, 1, -1)].view(1, 1, -1)                                                                                
-
     tensorPoints = torch.cat([tensorPointsA, tensorPointsB], 2).view(N,1,3,-1)
     tensorImage = torch.cat([tensorImageA.view(N,3,-1), tensorImageB.view(N,3,-1)],2)
     tensorDepth = torch.cat([tensorDepthA.view(N,1,-1), tensorDepthB.view(N,1,-1)],2)
@@ -397,59 +333,11 @@ def generate_new_view_from_inpaint(tensorPointsA,
                                 intWidth, intHeight, dblFocal, dblBaseline)
 
 
-    # tensorRenderC = fill_disocclusion(tensorRenderCHole, tensorRenderCHole[:, 3:4, :, :]  )
-
 
     return tensorRenderCHole, tensorMasksC
 
-# def generate_new_view_from_inpaint(tensorPointsA, 
-#                                     tensorImageA, 
-#                                     tensorDisparityA, 
-#                                     tensorDepthA,
-#                                     tensorImageB, 
-#                                     tensorDisparityB, 
-#                                     tensorDepthB, 
-#                                     tensorMaskB, 
-#                                     tensorShift):
-#     dblFocal = 1024 / 2.0
-#     dblBaseline = 40.0
-#     intHeight, intWidth = tensorImageA.shape[-2:]
-#     N = tensorImageA.shape[0]
-#     tensorValidB = (spatial_filter(tensorDisparityB / tensorDisparityB.max(), 'laplacian').abs() < 0.03).float()
-#     tensorPointsB = depth_to_points(tensorDepthB , dblFocal)
-
-#     tensorMaskB = (tensorMaskB == 0.0).view(N, 1, 1, -1)
-
-#     # Concat everything into on object for rendering
-#     tensorRenderC = []
-#     for batch_id in range(N):
-#         tensorPoints = torch.cat([tensorPointsA[batch_id].view(1, 3, -1) + tensorShift[batch_id].view(1, 3, 1), 
-#                                 tensorPointsB[batch_id].view(1, 3, -1)[tensorMaskB[batch_id].expand(-1, 3, -1)]
-#                                                                                             .view(1, 3, -1)], 2)
-#         print((tensorPoints == 0).sum())
-#         tensorImage = torch.cat([ tensorImageA[batch_id].view(1, 3, -1), 
-#                                 tensorImageB[batch_id].view(1, 3, -1)[tensorMaskB[batch_id].expand(-1, 3, -1)]
-#                                                                                             .view(1, 3, -1) ], 2)
-
-#         tensorDisparity = torch.cat([ tensorDisparityA[batch_id].view(1, 1, -1), 
-#                                 tensorDisparityB[batch_id].view(1, 1, -1)[tensorMaskB[batch_id].expand(-1, 1, -1)]
-#                                                                                                 .view(1, 1, -1) ], 2)
-        
-#         tensorDepth = torch.cat([ tensorDepthA[batch_id].view(1, 1, -1), 
-#                                 tensorDepthB[batch_id].view(1, 1, -1)[tensorMaskB[batch_id].expand(-1, 1, -1)]
-#                                                                                                 .view(1, 1, -1) ], 2)
-
-#         tensorRenderCHole, tensorMasksC = render_pointcloud(tensorPoints.view(1, 3, -1) - tensorShift[batch_id].view(1, 3, 1)/2,
-#                                     torch.cat([tensorImage, tensorDepth], 1).view(1, 4, -1),
-#                                     intWidth, intHeight, dblFocal, dblBaseline)
-
-
-#         tensorRenderC.append(fill_disocclusion(tensorRenderCHole, tensorRenderCHole[:, 3:4, :, :] * (tensorMasksC > 0.0).float() ))
-
-
-#     return torch.cat(tensorRenderC, 0)
     
-
+# Sample random cropping windows for simulating 3D KBE
 def get_random_zoom(imgHeight, imgWidth):
     centerUFrom = np.random.uniform(0.3,0.7) * imgWidth
     centerVFrom = np.random.uniform(0.3,0.7) * imgHeight
@@ -477,12 +365,6 @@ def get_random_zoom(imgHeight, imgWidth):
         'intCropHeight': int(imgHeight * ratioCropTo)
     }
 
-    # objectSettings = {
-    #     'objectFrom' : objectFrom,
-    #     'objectTo' : objectTo
-    # }        
-
-    # return objectSettings
     return objectFrom, objectTo
 
 def get_item_in_dict(dict_in, idx):
@@ -653,6 +535,4 @@ class VGG16Partial(nn.Module):
             h4 = h
             output = [h1, h2, h3, h4]
         return output
-            
-
 

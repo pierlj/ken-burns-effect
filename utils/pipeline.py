@@ -11,7 +11,6 @@ import torch.nn.functional as F
 import torchvision
 from tqdm import tqdm
 
-from models.disparity_adjustment import disparity_adjustment
 from models.disparity_estimation import Disparity, Semantics
 from models.disparity_refinement import Refine
 from models.disparity_refinement_pretrained import Refine as RefineP
@@ -43,9 +42,6 @@ class Pipeline():
             self.moduleInpaint = PartialInpaint().to(device).eval()
         else:
             self.moduleInpaint = Inpaint().to(device).eval()
-        
-        
-
         
         models_list = [{'model':self.moduleDisparity,
                             'type':'disparity'},
@@ -128,6 +124,7 @@ class Pipeline():
                     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(frames_dir + '/' +str(idx) + '.png', frame)
 
+        # Create video output
         if output_path is not None:
             if pretrained_estim:
                 moviepy.editor.ImageSequenceClip(sequence=[ numpyFrame[:, :, :] for numpyFrame in numpyResult + list(reversed(numpyResult))[1:] ], fps=25).write_videofile(os.path.join(output_path,'3d_kbe.mp4'), codec='mpeg4')

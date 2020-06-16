@@ -1,18 +1,18 @@
 import os
+
+import cv2
+import h5py
 import imageio as io
 import torch
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset
-import cv2
-import h5py
 from PIL import Image
+from torch.utils.data import Dataset
 
 from utils.utils import *
 
 
-
 class Dataset(Dataset):
-    def __init__(self, datasets, max_dim=1024, mode='disparity'):
+    def __init__(self, datasets, max_dim=1024, mode='disparity', imagenet_path=None):
         self.datasets = datasets
 
         self.data_path = []
@@ -66,70 +66,35 @@ class Dataset(Dataset):
         ######################
         # Get imagenet paths #
         ######################
-
-        image_net_folder = '/scratch/s182169/ImageNet/ILSVRC/Data/DET/train/'
+        
+        if imagenet_path is not None:
+            image_net_folder = imagenet_path
+        else:
+            image_net_folder = '/scratch/s182169/ImageNet/ILSVRC/Data/DET/train/'
 
         self.paths = os.listdir(image_net_folder)
         
-        # self.imagenet_preparation = transforms.Compose([transforms.RandomResizedCrop(256),
-        #                                         transforms.ToTensor(),
-        #                                         transforms.Normalize((.5, .5, .5), (.5, .5, .5))])
         self.imagenet_preparation = transforms.Compose([
                                                 transforms.RandomResizedCrop(256),
                                                 transforms.ToTensor(),
-                                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                            ])
-        
-        # Mask loss computed on ImageNet : /!\ Change size of mask in step_imagenet: 128
+                                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
         self.imagenet_paths = []
 
         for sub_dir_path in self.paths:
             for img in os.listdir(os.path.join(image_net_folder, sub_dir_path)):
                 self.imagenet_paths.append(os.path.join(image_net_folder, sub_dir_path, img))
         
-        self.imagenet_len = len(self.imagenet_paths)
-
-        ## Mask loss computed on Megadepth  /!\ Change size of mask in step_imagenet: 256
-        # image_net_folder = '/scratch/s182169/MegaDepth/train/images/'
-
-        # self.paths = os.listdir(image_net_folder)
-        
-        # self.imagenet_preparation = transforms.Compose([transforms.RandomResizedCrop(512),
-        #                                         transforms.ToTensor(),
-        #                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-        
-        # self.imagenet_paths = []
-
-
-        # for img in os.listdir(image_net_folder):
-        #     self.imagenet_paths.append(os.path.join(image_net_folder, img))
-        
-        # self.imagenet_len = len(self.imagenet_paths)
-        
-
-        ######################
-        # Get irr mask paths #
-        ######################
-        if self.mode == 'inpainting':
-            mask_folder = '/scratch/s182169/MasksDataset/mask/'
-            self.masks_paths = []
-            for mask in os.listdir(mask_folder):
-                self.masks_paths.append(os.path.join(mask_folder, mask))
-            
-            self.inpainting_masks_len = len(self.masks_paths)
-
+        self.imagenet_len = len(self.imagenet_paths)        
 
 
     def __getitem__(self, index):
-        # index = 0
         path_img, id_dataset = self.images_paths[index]
         path_depth = self.depth_paths[index][0]
-        # path_disparity = self.disparity_paths[index]
+
         
         numpyImage = cv2.imread(filename=path_img, flags=cv2.IMREAD_COLOR)
-        # numpyImage = cv2.cvtColor(numpyImage, cv2.COLOR_BGR2RGB)
-        if numpyImage is None:
-            print(path_img)
+        numpyImage = cv2.cvtColor(numpyImage, cv2.COLOR_BGR2RGB) # convert image into RGB (cv2 loads by default in BGR)
 
         if self.datasets[id_dataset]['name'] == 'mega':
             hdf5_file_read = h5py.File(path_depth,'r')
@@ -145,27 +110,19 @@ class Dataset(Dataset):
             if self.datasets[id_dataset]['name'] == 'gta':
                 numpyDepth[numpyDepth == np.inf] = self.data_params[id_dataset]['focal'] * self.data_params[id_dataset]['baseline']
 
-            if numpyDepth is None:
-                print(path_depth)
             numpyMasks = np.ones(numpyDepth.shape)
             numpyDisparity = self.data_params[id_dataset]['focal'] * self.data_params[id_dataset]['baseline'] / (numpyDepth + 1e-4)
             
 
         if self.cropping:
-            # print(numpyImage.shape)
             start_h = np.random.randint(0, numpyImage.shape[0] - self.max_h + 1)
             start_w = np.random.randint(0, numpyImage.shape[1] - self.max_w + 1)
-
-            # if self.mode== 'eval':
-            #     start_h, start_w = 100, 100
 
             numpyDepth = numpyDepth[start_h:start_h + self.max_h, start_w:start_w + self.max_w]
             numpyDisparity = numpyDisparity[start_h:start_h + self.max_h, start_w:start_w + self.max_w]
             numpyImage = numpyImage[start_h:start_h + self.max_h, start_w:start_w + self.max_w]
             numpyMasks = numpyMasks[start_h:start_h + self.max_h, start_w:start_w + self.max_w]                          
 
-
-        # numpyDepth = numpyDepth * 1.0 / 65535
 
         # resize image to 1024 pixels max, conserving aspect ratio
         intWidth = numpyImage.shape[1]
@@ -176,6 +133,8 @@ class Dataset(Dataset):
         intWidth = min(int(self.max_dim * dblRatio), self.max_dim)
         intHeight = min(int(self.max_dim / dblRatio), self.max_dim)
 
+
+        # resize images according to training mode, helps to reduce memory footprint
         if self.mode == 'disparity':
             ratios = {'image': 2, 'disparity': 4, 'masks': 4}
         elif self.mode == 'refine' or self.mode == 'eval' or self.mode == 'inpaint-eval':
@@ -209,28 +168,16 @@ class Dataset(Dataset):
         
         numpyImageNet = cv2.imread(filename=path_img, flags=cv2.IMREAD_COLOR)
         numpyImageNet = cv2.cvtColor(numpyImageNet, cv2.COLOR_BGR2RGB)
-        if numpyImageNet is None:
-            print(index)
-            print(path_img)
+
         PILImage = Image.fromarray(numpyImageNet)
         self.imageNet = self.imagenet_preparation(PILImage)#.to(device)
 
-        #######################
-        # get irregular masks #
-        #######################
-
-        if self.mode == 'inpainting-irr':
-            mask_path = self.masks_paths[index%self.inpainting_masks_len]
-            irr_mask = self.mask_preparation(Image.open(mask_path)) 
-
-            self.masks = 1 - irr_mask # background 1 and holes 0
         
-        elif self.mode == 'inpainting' or self.mode == 'inpaint-eval':
+        if self.mode == 'inpainting' or self.mode == 'inpaint-eval':
             self.zoom_from, self.zoom_to = get_random_zoom(*self.depth.shape[-2:])
 
 
         if self.output_depth:
-            # return (self.image, self.depth, self.disparity, self.masks, id_dataset)
             return None
         elif self.mode == 'inpainting' or self.mode == 'inpaint-eval':
             return (self.image, self.disparity, self.depth, self.zoom_from, self.zoom_to, id_dataset)
@@ -239,50 +186,14 @@ class Dataset(Dataset):
 
     def __len__(self):
         return len(self.images_paths)
-        # return 500
     
     def pin_memory(self):
-        
         self.image = self.image.pin_memory()
         self.depth = self.depth.pin_memory()
         self.disparity = self.disparity.pin_memory()
         self.masks = self.masks.pin_memory()
         # self.id_dataset = self.id_dataset.pin_memory()
         return self
-
-
-    def get_dataloader(self, batch_size=4, shuffle=True):
-        data_loader = torch.utils.data.DataLoader(self, batch_size=batch_size, shuffle=shuffle, pin_memory=True, num_workers=2)
-        return data_loader
-
-
-class ImageNetDataset(Dataset):
-    def __init__(self, path):
-        
-        self.paths = os.listdir(path)
-        
-        self.image_preparation = transforms.Compose([transforms.RandomCrop(256),
-                                                transforms.ToTensor(),
-                                                transforms.Normalize((.5, .5, .5), (.5, .5, .5))])
-        
-        
-        self.images_paths = []
-
-        for sub_dir_path in self.paths:
-            for img in os.listdir(os.path.join(path,sub_dir_path)):
-                self.images_paths.append(os.path.join(path, sub_dir_path, img))
-        
-
-    def __getitem__(self, index):
-
-        path_img = self.images_paths[index]
-        
-        numpyImage = cv2.imread(filename=path_img, flags=cv2.IMREAD_COLOR)
-        PILImage = Image.fromarray(numpyImage)
-        return self.image_preparation(PILImage)#.to(device)
-
-    def __len__(self):
-        return len(self.images_paths)
 
 
     def get_dataloader(self, batch_size=4, shuffle=True):

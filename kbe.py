@@ -1,15 +1,14 @@
-import torch
-import torchvision.transforms as transforms
+import getopt
 import math
 import os
 import sys
-import getopt
+
 import cv2
+import torch
+import torchvision.transforms as transforms
 
 from utils.data_loader import Dataset
 from utils.pipeline import Pipeline
-
-
 
 
 torch.set_grad_enabled(False) # make sure to not compute gradients for computational performance

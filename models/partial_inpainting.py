@@ -12,23 +12,12 @@ class Basic(nn.Module):
 		self.strType = strType
 
 		if strType == 'relu-conv-relu-conv':
-			# self.moduleMain = nn.Sequential(
-			# 	nn.PReLU(num_parameters=intChannels[0], init=0.25),
-			# 	PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1),
-			# 	nn.PReLU(num_parameters=intChannels[1], init=0.25),
-			# 	PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1)
-			# )
 			self.p_relu_1 = nn.PReLU(num_parameters=intChannels[0], init=0.25)
 			self.conv1 = PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1, multi_channel=True, return_mask=True)
 			self.p_relu_2 = nn.PReLU(num_parameters=intChannels[1], init=0.25)
 			self.conv2 = PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1, multi_channel=True, return_mask=True)
 
 		elif strType == 'conv-relu-conv':
-			# self.moduleMain = nn.Sequential(
-			# 	PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1),
-			# 	nn.PReLU(num_parameters=intChannels[1], init=0.25),
-			# 	PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1)
-			# )
 			self.conv1 = PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1, multi_channel=True, return_mask=True)
 			self.p_relu_2 = nn.PReLU(num_parameters=intChannels[1], init=0.25)
 			self.conv2 = PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1, multi_channel=True, return_mask=True)
@@ -70,13 +59,6 @@ class Basic(nn.Module):
 class Downsample(nn.Module):
 	def __init__(self, intChannels):
 		super(Downsample, self).__init__()
-
-		# self.moduleMain = nn.Sequential(
-		# 	nn.PReLU(num_parameters=intChannels[0], init=0.25),
-		# 	PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=2, padding=1),
-		# 	nn.PReLU(num_parameters=intChannels[1], init=0.25),
-		# 	PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1)
-		# )
 		self.p_relu_1 = nn.PReLU(num_parameters=intChannels[0], init=0.25)
 		self.conv1 = PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=2, padding=1, multi_channel=True, return_mask=True)
 		self.p_relu_2 = nn.PReLU(num_parameters=intChannels[1], init=0.25)
@@ -95,14 +77,6 @@ class Downsample(nn.Module):
 class Upsample(nn.Module):
 	def __init__(self, intChannels):
 		super(Upsample, self).__init__()
-
-		# self.moduleMain = nn.Sequential(
-		# 	nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-		# 	nn.PReLU(num_parameters=intChannels[0], init=0.25),
-		# 	PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1),
-		# 	nn.PReLU(num_parameters=intChannels[1], init=0.25),
-		# 	PartialConv2d(in_channels=intChannels[1], out_channels=intChannels[2], kernel_size=3, stride=1, padding=1)
-		# )
 		self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
 		self.p_relu_1 = nn.PReLU(num_parameters=intChannels[0], init=0.25)
 		self.conv1 = PartialConv2d(in_channels=intChannels[0], out_channels=intChannels[1], kernel_size=3, stride=1, padding=1, multi_channel=True, return_mask=True)
@@ -134,8 +108,6 @@ class Inpaint(nn.Module):
 			nn.PReLU(num_parameters=64, init=0.25)
 		)
 
-		# tensorImage :: tensorDisparity :: tensorContext (64ch) // mask given inside partial conv
-		# self.moduleInput = Basic('conv-relu-conv', [ 3 + 1 + 64 + 1, 32, 32 ]) 
 		self.moduleInput = Basic('conv-relu-conv', [ 3 + 1 + 64, 32, 32 ]) 
 
 		for intRow, intFeatures in [ (0, 32), (1, 64), (2, 128), (3, 256) ]:
@@ -191,8 +163,8 @@ class Inpaint(nn.Module):
 				tensorDown, tensorDownMask= self._modules[get_module_name(intRow - 1, intColumn, intRow, intColumn)](tensorColumn[intRow - 1],
 																												tensorColumnMask[intRow - 1])
 				tensorColumn[intRow] += tensorDown
-				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorDownMask)
-				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorDownMask)
+				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorDownMask) # AND aggregation
+				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorDownMask) # OR aggregation
 		# end
 
 		intColumn = 2
@@ -211,8 +183,8 @@ class Inpaint(nn.Module):
 					tensorUpMask = F.pad(input=tensorUpMask, pad=[ 0, -1, 0, 0 ], mode='constant', value=1.0)
 
 				tensorColumn[intRow] += tensorUp
-				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorUpMask)
-				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorUpMask)
+				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorUpMask) # AND aggregation
+				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorUpMask) # OR aggregation
 			# end
 		# end
 
@@ -233,8 +205,8 @@ class Inpaint(nn.Module):
 					tensorUpMask = F.pad(input=tensorUpMask, pad=[ 0, -1, 0, 0 ], mode='constant', value=1.0)
 
 				tensorColumn[intRow] += tensorUp
-				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorUpMask)
-				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorUpMask)
+				# tensorColumnMask[intRow] = torch.max(tensorColumnMask[intRow], tensorUpMask) # AND aggregation
+				tensorColumnMask[intRow] = torch.min(tensorColumnMask[intRow], tensorUpMask) # OR aggregation
 			# end
 		# end
 		tensorImage, _ = self.moduleImage(tensorColumn[0])
@@ -256,6 +228,7 @@ class Inpaint(nn.Module):
 			dblFocal = objectCommon['dblFocal']
 		print('im,', tensorImage.shape)
 		assert tensorImage.shape[0] == 1, 'Please process one image at a time.'
+
 		# Compute detpth and point cloud
 		tensorDepth = (dblFocal * objectCommon['dblBaseline']) / (tensorDisparity + 0.0000001)
 		tensorValid = (spatial_filter(tensorDisparity / tensorDisparity.max(), 'laplacian').abs() < 0.03).float()
@@ -302,7 +275,5 @@ class Inpaint(nn.Module):
 
 			tensorDisparity *= self.tensorStd[1] + 0.0000001
 			tensorDisparity += self.tensorMean[1]
-
-			# self.tensorMean, self.tensorStd = None, None
 		
 		return tensorImage, tensorDisparity

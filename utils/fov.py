@@ -1,5 +1,7 @@
 import math
+
 import torch
+
 
 def reduceNet(net, architecture):
     children = list(net.children())

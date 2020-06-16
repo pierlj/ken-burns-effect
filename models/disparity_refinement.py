@@ -108,7 +108,6 @@ class Refine(nn.Module):
 		tensorRefine *= tensorStd[1] + 0.0000001
 		tensorRefine += tensorMean[1]
 
-		# return F.threshold(input=tensorRefine, threshold=0.0, value=0.0)
 		return tensorRefine
 	# end
 # end

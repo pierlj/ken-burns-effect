@@ -23,7 +23,7 @@ class TrainerDepth():
         self.dataset_paths = dataset_paths
         self.training_params = training_params
 
-        self.dataset = Dataset(dataset_paths)
+        self.dataset = Dataset(dataset_paths, imagenet_path=self.training_params['mask_loss_path'])
 
         torch.manual_seed(111)
         np.random.seed(42)
@@ -52,10 +52,8 @@ class TrainerDepth():
         self.moduleDisparity = Disparity().to(device).eval()
 
         weights_init(self.moduleDisparity)
-        # spectral_norm_switch(self.moduleDisparity, on=True)
 
         self.moduleMaskrcnn = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True).to(device).eval()
-        # self.moduleMaskrcnn = torch.hub.load('pytorch/vision:v0.5.0', 'deeplabv3_resnet101', pretrained=True).to(device).eval()
         
         self.optimizer_disparity = torch.optim.Adam(self.moduleDisparity.parameters(), lr=self.training_params['lr_estimation'])
 
@@ -67,7 +65,6 @@ class TrainerDepth():
             weights_init(self.moduleRefine)
             self.optimizer_refine = torch.optim.Adam(self.moduleRefine.parameters(), lr=self.training_params['lr_refine'])
             self.scheduler_refine = torch.optim.lr_scheduler.LambdaLR(self.optimizer_refine, lr_lambda=lambda_lr)
-
 
         if models_paths is not None:
             print('Loading model state from '+ str(models_paths))
@@ -88,11 +85,8 @@ class TrainerDepth():
             self.iter_nb = load_models(models_list, models_paths, continue_training=continue_training)
 
 
-        if len(sys.argv) - 1 >= 2:
-            # self.writer = CustomWriter(logs_path, 'kappa=' + sys.argv[1] + '-gamma=' + sys.argv[2])
-            self.writer = CustomWriter(logs_path, 'kappa=' + sys.argv[1] + '-gamma=' + sys.argv[2] + '-' + sys.argv[3])
-        else:
-            self.writer = CustomWriter(logs_path)
+        # use tensorboard to keep track of the runs
+        self.writer = CustomWriter(logs_path)
 
         
     
@@ -117,24 +111,12 @@ class TrainerDepth():
             self.train_refine()
         
         elif self.training_params['model_to_train'] == 'disparity':
-            if self.training_params['mask_loss'] == 'imagenet':
-                self.imagenet_dataset = ImageNetDataset('/scratch/s182169/ImageNet/ILSVRC/Data/DET/train/')
-                self.imagenet_loader = self.imagenet_dataset.get_dataloader(batch_size=self.training_params['batch_size'])   
-            
             self.train_estimation()
-            # self.step_imagenet()
-
-        elif self.training_params['model_to_train'] == 'mask':
-            self.imagenet_dataset = ImageNetDataset('/scratch/s182169/ImageNet/ILSVRC/Data/DET/train/')
-            self.imagenet_loader = self.imagenet_dataset.get_dataloader(batch_size=self.training_params['batch_size'])   
-            self.train_imagenet()
                 
         self.writer.add_hparams(self.training_params, {})
 
     
     def train_estimation(self):
-        # mu1, mu2 = torch.Tensor(1)[0], torch.Tensor(1)[0]
-
         for epoch in range(self.training_params['n_epochs']):
             for idx, (tensorImage, GTdisparities, sparseMask, imageNetTensor, dataset_ids) in enumerate(tqdm(self.data_loader, desc='Epoch %d/%d'%(epoch +1 , self.training_params['n_epochs']))):
                 if ((idx + 1) % 500) ==0:
@@ -149,35 +131,26 @@ class TrainerDepth():
                 sparseMask = sparseMask.to(device, non_blocking=True)
                 imageNetTensor = imageNetTensor.to(device, non_blocking=True)
 
-
-                # tensorResized = tensorImage
                 with torch.no_grad():
                     semantic_tensor = self.moduleSemantics(tensorImage)
 
+                # forward pass
                 tensorDisparity = self.moduleDisparity(tensorImage, semantic_tensor)  # depth estimation
-                # tensorResized = None
                 tensorDisparity = F.threshold(tensorDisparity, threshold=0.0, value=0.0)
-                # compute losses 
-                # /!\ disparities after estimation network are downsampled: need to resize ground truth as well
-                # GTdisparities_resized = resize_image(GTdisparities, max_size=256)
-                # sparseMask_resized = resize_image(sparseMask, max_size=256)
-
+                
+                # reconstruction loss computation
                 estimation_loss_ord = compute_loss_ord(tensorDisparity, GTdisparities, sparseMask, mode='logrmse')
                 estimation_loss_grad = compute_loss_grad(tensorDisparity, GTdisparities, sparseMask)
 
+                # loss weights computation
                 beta = 0.015
-                
                 gamma_ord = 0.03 * (1+ 2 * np.exp( - beta * self.iter_nb)) # for scale-invariant Loss 
                 # gamma_ord = 0.001 * (1+ 200 * np.exp( - beta * self.iter_nb)) # for L1 loss
                 gamma_grad = 1 - np.exp( - beta * self.iter_nb)
                 gamma_mask = 0.0001 *(1 - np.exp( - beta * self.iter_nb))
 
-                # gamma_ord = 0.1 
-                # gamma_grad = 1
-                # gamma_mask = 0.0001
-                # print(gamma_ord, gamma_grad, gamma_mask)
                 if self.training_params['mask_loss'] == 'same':
-
+                    # when mask_loss is 'same' masks are computed on the same images 
                     with torch.no_grad():
                         objectPredictions = self.moduleMaskrcnn(tensorImage)
 
@@ -190,47 +163,28 @@ class TrainerDepth():
                  
                     loss_depth = gamma_ord * estimation_loss_ord + gamma_grad * estimation_loss_grad + gamma_mask * estimation_masked_loss
 
-                    
-                    
-                else:
+                else: # No mask loss in this case
                     loss_depth = gamma_ord * estimation_loss_ord + gamma_grad * estimation_loss_grad
-                    # loss_batch = gamma_ord * estimation_loss_ord + gamma_grad * estimation_loss_grad
-                    # corrected_loss = alrc(loss_batch, mu1=mu1, mu2=mu2)
-                    # loss_depth = torch.mean(corrected_loss)
-                    # loss_depth2 = torch.mean(corrected_loss**2)
-                    # print(loss_depth)
-
-                    # decay = 0.99
-                    # mu1 = decay*mu1+(1-decay)*loss_depth 
-                    # mu2 = decay*mu2+(1-decay)*loss_depth2
-                
-
-                if torch.sum(torch.isnan(loss_depth)):
-                    print('Not mask loss')
-                    print(self.iter_nb)
                     
-                    print(estimation_loss_grad)
-                    print(estimation_loss_ord)
-                    print(1/0)
-
+                # compute gradients and update net
                 self.optimizer_disparity.zero_grad()
                 loss_depth.backward()
                 torch.nn.utils.clip_grad_norm_(self.moduleDisparity.parameters(), 1)
                 self.optimizer_disparity.step()
                 self.scheduler_disparity.step()
 
+                # keep track of loss values
                 self.writer.add_scalar('Estimation/Loss ord', estimation_loss_ord, self.iter_nb)
                 self.writer.add_scalar('Estimation/Loss grad', estimation_loss_grad, self.iter_nb)
-                # self.writer.add_scalar('Estimation/Loss ord', torch.mean(estimation_loss_ord), self.iter_nb)
-                # self.writer.add_scalar('Estimation/Loss grad', torch.mean(estimation_loss_grad), self.iter_nb)
                 self.writer.add_scalar('Estimation/Loss depth', loss_depth, self.iter_nb)
                 
                 if self.training_params['mask_loss'] == 'same':
                     self.writer.add_scalar('Estimation/Loss mask', estimation_masked_loss, self.iter_nb)
-                elif self.training_params['mask_loss'] == 'imagenet':
-                    self.step_imagenet(imageNetTensor)
+                elif self.training_params['mask_loss'] == 'other':
+                    self.step_imagenet(imageNetTensor) # when mask loss is computed on another dataset
                 else:
                     self.writer.add_scalar('Estimation/Loss mask', 0, self.iter_nb)
+
                 # keep track of gradient magnitudes
                 # for i, m in enumerate(self.moduleDisparity.modules()):
                 #     if m.__class__.__name__ == 'Conv2d':
@@ -249,12 +203,8 @@ class TrainerDepth():
         self.dataset.mode = 'refine'
         self.data_loader = self.dataset.get_dataloader(batch_size=2)
 
-        # self.moduleDisparity = None
-
         for epoch in range(self.training_params['n_epochs']):
             for idx, (tensorImage, GTdisparities, masks, imageNetTensor, dataset_ids) in enumerate(tqdm(self.data_loader, desc='Epoch %d/%d'%(epoch +1 , self.training_params['n_epochs']))):
-                # if idx > 10:
-                #     break
                 if ((idx + 1) %500) == 0:
                     save_model({'refine': {'model':self.moduleRefine, 
                                 'opt':self.optimizer_refine, 
@@ -266,33 +216,25 @@ class TrainerDepth():
                 GTdisparities = GTdisparities.to(device, non_blocking=True)
                 masks = masks.to(device, non_blocking=True)
 
+                # first estimate depth with estimation net
                 with torch.no_grad():
                     tensorResized = resize_image(tensorImage, max_size=512)
                     tensorDisparity = self.moduleDisparity(tensorResized, self.moduleSemantics(tensorResized))  # depth estimation
                     tensorResized = None
 
-                    
-                    # end of forward pass for refinement network
-                    # objectPredictions = self.moduleMaskrcnn(tensorImage) # segment image in masks using Mask-RCNN
-                    # tensorDisparity = torch.cat(list(map(lambda i: disparity_adjustment(tensorImage[i], tensorDisparity[i], objectPredictions[i]), 
-                    #                                         np.arange(tensorImage.size(0)))))
-                    # objectPredictions = None
-
+                # forward pass with refinement net
                 tensorDisparity = self.moduleRefine(tensorImage, tensorDisparity)
                 
-                #compute losses
+                # compute losses
                 refine_loss_ord = compute_loss_ord(tensorDisparity, GTdisparities, masks)
                 refine_loss_grad = compute_loss_grad(tensorDisparity, GTdisparities, masks)
 
-                loss_depth =  0.0001 * refine_loss_ord + refine_loss_grad
-                # loss_depth = refine_loss_ord 
-                # loss_depth = refine_loss_grad
-
-                
+                loss_depth =  0.0001 * refine_loss_ord + refine_loss_grad              
                 
                 if self.training_params['model_to_train'] =='both':
                     self.optimizer_disparity.zero_grad()
 
+                # backward pass
                 self.optimizer_refine.zero_grad()
                 loss_depth.backward()
                 torch.nn.utils.clip_grad_norm_(self.moduleRefine.parameters(), 1)
@@ -315,83 +257,29 @@ class TrainerDepth():
                 #             self.writer.add_scalar('Refine gradients/Conv {}'.format(i), torch.norm(g/g.size(0), p=1).item(), self.iter_nb)
                 
                 self.iter_nb += 1
-
-    def train_imagenet(self):
-        print('Training further the disparity network on imagenet')
-        for epoch in range(self.training_params['n_epochs']):
-            for idx, tensorImage in enumerate(tqdm(self.imagenet_loader, desc='Epoch %d/%d'%(epoch +1 , self.training_params['n_epochs']))):
-                # if idx > 10:
-                #     break
-
-                if ((idx + 1) % 50) ==0:
-                    self.save_model()
-
-                tensorImage = tensorImage.to(device, non_blocking=True)
-
-                with torch.no_grad():
-                    semantic_tensor = self.moduleSemantics(tensorImage)
-
-                tensorDisparity = self.moduleDisparity(tensorImage, semantic_tensor)  # depth estimation
-
-                with torch.no_grad():
-                    objectPredictions = self.moduleMaskrcnn(tensorImage)
-
-                masks_tensor_list = list(map(lambda object_pred: resize_image(object_pred['masks'], max_size=128), objectPredictions))
-                estimation_masked_loss = 0
-                for i, masks_tensor in enumerate(masks_tensor_list):
-                    if masks_tensor is not None:
-                        estimation_masked_loss += 0.0001 * compute_masked_grad_loss(tensorDisparity[i].view(1,*tensorDisparity[i].shape),
-                                                                                masks_tensor, [1], 0)
-                
-                self.optimizer_disparity.zero_grad()
-                estimation_masked_loss.backward()
-                self.optimizer_disparity.step()
-                self.scheduler_disparity.step()
-
-                # Still keep track of other metric otherwise tensorboard behaves badly
-                self.writer.add_scalar('Estimation/Loss ord', 0, self.iter_nb)
-                self.writer.add_scalar('Estimation/Loss grad', 0, self.iter_nb)
-                self.writer.add_scalar('Estimation/Loss depth', 0, self.iter_nb)
-
-                self.writer.add_scalar('Estimation/Loss mask', estimation_masked_loss, self.iter_nb)
-
-                self.iter_nb += 1
     
     
     def step_imagenet(self, tensorImage):
-
-        # tensorImage = next(iter(self.imagenet_loader))
-        # tensorImage = tensorImage.to(device, non_blocking=True)
-
         with torch.no_grad():
             semantic_tensor = self.moduleSemantics(tensorImage)
 
         tensorDisparity = self.moduleDisparity(tensorImage, semantic_tensor)  # depth estimation
 
+        # compute segmentation masks on batch
         with torch.no_grad():
             objectPredictions = self.moduleMaskrcnn(tensorImage)
-            # objectPredictions = self.moduleMaskrcnn(tensorImage)['out'].argmax(1) #DeepLabV3
 
-        def to_npy(img):
-            npyImg = img.permute(1,2,0).cpu().numpy()
-            npyImg = (npyImg + 1) / 2
-            npyImg = npyImg * 255
-            return npyImg.astype(np.uint8)
-
-        masks_tensor_list = list(map(lambda object_pred: resize_image(object_pred['masks'], max_size=256), objectPredictions))
-        # masks_tensor_list = class_to_masks(objectPredictions) # DeepLabV3
-        # edges_tensor_list = list(map(lambda img: 1- resize_image(torch.from_numpy(cv2.Canny(to_npy(img),200,200).astype(float)).view(1,1,256,256)/255, max_size=128), tensorImage))
+        masks_tensor_list = list(map(lambda object_pred: resize_image(object_pred['masks'], max_size=256), objectPredictions))        
         
+        # compute mask loss
         estimation_masked_loss = 0
         for i, masks_tensor in enumerate(masks_tensor_list):
-            # print(masks_tensor.sum())
-            # print(masks_tensor.shape[0]*masks_tensor.shape[2]*masks_tensor.shape[3])
-
             if masks_tensor is not None:
                 estimation_masked_loss += 0.0001 * compute_masked_grad_loss(tensorDisparity[i].view(1,*tensorDisparity[i].shape),
                                                                         resize_image(masks_tensor.view(-1,1,256,256), max_size=128), [1],  1)
         
         if estimation_masked_loss != 0:
+            # backward pass for mask loss only
             self.optimizer_disparity.zero_grad()
             estimation_masked_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.moduleDisparity.parameters(), 0.1)
@@ -402,6 +290,7 @@ class TrainerDepth():
 
   
     def validation(self, refine_training=False):
+        # compute metrics on the validation set
         self.moduleDisparity.eval()
         if refine_training:
             self.moduleRefine.eval()
@@ -414,10 +303,6 @@ class TrainerDepth():
 
         with torch.no_grad():
             for idx, (tensorImage, disparities, masks, imageNetTensor, dataset_ids) in enumerate(tqdm(self.data_loader_validation, desc='Validation')):
-                
-                # if idx > 5:
-                #     break
-
                 tensorImage = tensorImage.to(device, non_blocking=True)
                 disparities = disparities.to(device, non_blocking=True)
                 masks = masks.to(device, non_blocking=True)
@@ -426,12 +311,7 @@ class TrainerDepth():
                 tensorDisparity = self.moduleDisparity(tensorResized, self.moduleSemantics(tensorResized))  # depth estimation
 
                 if refine_training:
-                    # objectPredictions = self.moduleMaskrcnn(tensorImage) # segment image in mask using Mask-RCNN
-                    # tensorDisparity = torch.cat(list(map(lambda i: disparity_adjustment(tensorImage[i], tensorDisparity[i], objectPredictions[i]), 
-                    #                                         np.arange(tensorImage.size(0)))))
-
                     tensorDisparity = self.moduleRefine(tensorImage, tensorDisparity) # increase resolution
-                    
                 else:
                     disparities = resize_image(disparities, max_size=256)
                     masks = resize_image(masks, max_size=256)
@@ -447,7 +327,6 @@ class TrainerDepth():
         for i, name in enumerate(metrics_list):
             metrics[name] = measures[i]
             self.writer.add_scalar('Validation/' + name, measures[i], self.iter_nb)
-        
         
         if refine_training:
             self.moduleRefine.train()

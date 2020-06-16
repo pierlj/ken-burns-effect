@@ -102,7 +102,6 @@ class PerceptualDiscriminator(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
         self.loss = nn.MSELoss()
-        # self.loss = nn.BCEWithLogitsLoss()
 
         self.spectral_norm = False
     
@@ -172,10 +171,6 @@ class MultiScalePerceptualDiscriminator(nn.Module):
 class MultiScaleDiscriminator(nn.Module):
     def __init__(self):
         super(MultiScaleDiscriminator, self).__init__()
-
-        # self.extractor = VGG16Partial().eval()
-        # for p in self.extractor.parameters():
-        #     p.requires_grad = False
 
         self.ConvBlock0 = VGGBlock(3, 64)
         self.ConvBlock1 = VGGBlock(64, 128)
