@@ -9,10 +9,9 @@ import torch.nn.functional as F
 import torchvision
 from tqdm import tqdm
 
-from models.disparity_adjustment import disparity_adjustment
 from models.disparity_estimation import Disparity, Semantics
 from models.disparity_refinement import Refine
-from utils.data_loader import Dataset, ImageNetDataset
+from utils.data_loader import Dataset
 from utils.losses import *
 from utils.utils import *
 

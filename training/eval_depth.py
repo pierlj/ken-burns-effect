@@ -7,7 +7,6 @@ import torch.nn.functional as F
 import torchvision
 from tqdm import tqdm
 
-from models.disparity_adjustment import disparity_adjustment
 from models.disparity_estimation import Disparity, Semantics
 from models.disparity_refinement import Refine
 from utils.data_loader import Dataset
@@ -110,7 +109,6 @@ class DepthEval():
         objectPredictions = self.moduleMaskrcnn(tensorImage) # segment image in mask using Mask-RCNN
 
         tensorDisparityAdjusted = tensorDisparity
-        print(tensorImage.size())
         tensorDisparityRefined = self.moduleRefine(tensorImage[:2,:,:,:], tensorDisparityAdjusted[:2,:,:,:]) # increase resolution
 
         return (detach_tensor(tensorDisparity), 

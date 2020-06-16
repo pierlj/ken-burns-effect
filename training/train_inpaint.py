@@ -14,7 +14,7 @@ from models.discriminator import *
 from models.partial_inpainting import Inpaint as PartialInpaint
 from models.pointcloud_inpainting import Inpaint
 from utils.common import depth_to_points, generate_mask, spatial_filter
-from utils.data_loader import Dataset, ImageNetDataset
+from utils.data_loader import Dataset
 from utils.fid import FID
 from utils.losses import *
 from utils.utils import *

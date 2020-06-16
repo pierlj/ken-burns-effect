@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 import torch
 
-from models.disparity_adjustment import disparity_adjustment
 from models.disparity_estimation import Disparity, Semantics
 from models.disparity_refinement import Refine
 
@@ -21,7 +20,7 @@ def process_load(numpyImage, objectSettings, objectCommon):
 
 	tensorImage = torch.FloatTensor(numpyImage.transpose(2, 0, 1)).unsqueeze(0).cuda() / 255.0
 	tensorDisparity = disparity_estimation(tensorImage)
-	tensorDisparity = disparity_adjustment(tensorImage, tensorDisparity)
+	# tensorDisparity = disparity_adjustment(tensorImage, tensorDisparity)
 	tensorDisparity = disparity_refinement(tensorImage, tensorDisparity)
 	tensorDisparity = tensorDisparity / tensorDisparity.max() * objectCommon['dblBaseline']
 	tensorDepth = (objectCommon['dblFocal'] * objectCommon['dblBaseline']) / (tensorDisparity + 0.0000001)

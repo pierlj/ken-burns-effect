@@ -51,8 +51,7 @@ save_name = '3dkbe'
 
 
 strParameter = ['mask-loss=', 'mask-loss-dataset=', 'n-epochs=', 'lr-estimation=', 'lr-refinement=', 'lr-inpaint=', 
-                'lr-discriminator=', 'save-name=', 'model-path=', 'batch-size=', 'gamma-lr=', 'partial-conv', 'training-mode=',
-                'save-path=']
+                'lr-discriminator=', 'save-name=', 'model-path=', 'batch-size=', 'gamma-lr=', 'partial-conv', 'training-mode=']
 
 for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]: 
     if strOption == '--training-mode' and strArgument != '' and strArgument in ['estimation', 'refinement', 'inpainting', 'inpainting_ref']: 
@@ -92,7 +91,10 @@ for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]:
     if strOption == '--gamma-lr' and strArgument != '': 
         gamma_lr = float(strArgument) # batch size
     
-    if strOption == '--gamma-lr' and strArgument != '': 
+    if strOption == '--n-epochs' and strArgument != '': 
+        n_epochs = int(strArgument) # batch size
+    
+    if strOption == '--save-name' and strArgument != '': 
         save_name = strArgument # network save name, note that this will be combine with the type of network trained
     
 
@@ -101,7 +103,7 @@ if mask_loss_mode == 'other':
 elif mask_loss_mode == 'none':
     mask_loss_mode = None
 
-if training_mode is in ['refinement', 'inpainting_ref']:
+if training_mode in ['refinement', 'inpainting_ref']:
     assert model_path is not None, 'Need path to pre-trained network for refinement training.'
 
 
@@ -130,7 +132,9 @@ if __name__ == '__main__':
                                 'model_to_train':'refine',
                                 'lr_estimation':lr_estimation,
                                 'lr_refine':lr_refinement,
-                                'save_name':save_name},
+                                'save_name':save_name,
+                                'mask_loss': mask_loss_mode,
+                                'mask_loss_path': mask_loss_dataset},
                                  models_paths=model_path)
             
         train_depth.train()
