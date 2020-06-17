@@ -33,14 +33,14 @@ endU, endV = None, None
 endW, endH = None, None
 
 
-inpaint_path = './models/trained/inpaint-in-out-adversarial-pretrained.tar'
-refine_path = './models/trained/disparity-refinement-in-out-full.tar'
-estim_path = './models/trained/disparity-in-out-full-maskimagenet.tar'
-inpaint_depth_path = './models/trained/inpaint-in-out-adversarial-maskvalid.tar' 
+inpaint_path = './models/trained/inpainting-color.tar'
+refine_path = './models/trained/disparity-refinement.tar'
+estim_path = './models/trained/disparity-estimation-no-mask.tar'
+inpaint_depth_path = './models/trained/inpainting-depth.tar' 
 
 strParameter = ['in=', 'out=', 'dolly', 'write-frames', 'inpaint-path=', 
                 'refine-path=', 'estim-path=', 'startU=', 'startV=', 'endU=', 
-                'endV=', 'startW=', 'startH=', 'endW=', 'endH=', 'pretrained-refine', 'pretrained-estim', 'inpaint-depth']
+                'endV=', 'startW=', 'startH=', 'endW=', 'endH=', 'pretrained-refine', 'pretrained-estim', 'inpaint-depth=']
 
 for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]:
     if strOption == '--in' and strArgument != '': 
@@ -56,10 +56,11 @@ for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]:
         pretrained_refine = True # if pretrained network from 3D KBE paper are used
     if strOption == '--pretrained-estim': 
         pretrained_estim = True # if pretrained network from 3D KBE paper are used
-    if strOption == '--inpaint-depth': 
+
+
+    if strOption == '--inpaint-depth' and strArgument != '': 
         inpaint_depth = True # if pretrained network from 3D KBE paper are used
-
-
+        inpaint_depth_path = strArgument
     if strOption == '--inpaint-path' and strArgument != '': 
         inpaint_path = strArgument # path to where the inpainting network is stored
     if strOption == '--refine-path' and strArgument != '': 
