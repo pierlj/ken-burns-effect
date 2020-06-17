@@ -85,4 +85,5 @@ Note that some adjustment may also be required in the data loading file (`data_l
 
 **Important notes** 
 - It is important to set properly the `CUDA_HOME` variable according to your system so that CUDA kernels can be executed.
-- It is highly recommended to run these scripts on a GPU. Minimum recommended memory would be 6 GB. 
+- It is highly recommended to run these scripts on a GPU. Minimum recommended memory would be 6 GB.
+- Dependencies: `PyTorch=1.3.1`, `kornia=0.3.0`, `cupy`, `h5py`, `opencv`, `dill`
