@@ -29,6 +29,10 @@ To generate 3D KBE use the script `kbe.py`. Some parameters can be set to change
     * `startH=`: height of the starting crop window
     * `endW=`: width of the ending crop window
     * `endH=`: height of the ending crop window
+    
+* Other parameters:
+    * `write-frames`: output frames of the video in high quality in a separate folder
+    * `2d`: perform the 2D Ken Burns effect
 
 If some of the cropping windows parameters are not specified, default parameters will be applied. 
 
