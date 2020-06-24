@@ -26,6 +26,7 @@ output_frames = False
 pretrained_estim = False
 pretrained_refine = False
 inpaint_depth = False
+d2 = False
 
 startU, startV = None, None
 startW, startH = None, None
@@ -40,7 +41,7 @@ inpaint_depth_path = './models/trained/inpainting-depth.tar'
 
 strParameter = ['in=', 'out=', 'dolly', 'write-frames', 'inpaint-path=', 
                 'refine-path=', 'estim-path=', 'startU=', 'startV=', 'endU=', 
-                'endV=', 'startW=', 'startH=', 'endW=', 'endH=', 'pretrained-refine', 'pretrained-estim', 'inpaint-depth=']
+                'endV=', 'startW=', 'startH=', 'endW=', 'endH=', 'pretrained-refine', 'pretrained-estim', 'inpaint-depth=', '2d']
 
 for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]:
     if strOption == '--in' and strArgument != '': 
@@ -56,6 +57,8 @@ for strOption, strArgument in getopt.getopt(sys.argv[1:], '', strParameter)[0]:
         pretrained_refine = True # if pretrained network from 3D KBE paper are used
     if strOption == '--pretrained-estim': 
         pretrained_estim = True # if pretrained network from 3D KBE paper are used
+    if strOption == '--2d': 
+        d2 = True # make a 2D KBE instead of 3D
 
 
     if strOption == '--inpaint-depth' and strArgument != '': 
@@ -134,7 +137,7 @@ if __name__ == '__main__':
         startU, startV = imgWidth / 2, imgHeight / 2
         startW, startH = int(math.floor(0.8 * imgWidth)), int(math.floor(0.8 * imgHeight))
         endU, endV = imgWidth / 2, imgHeight / 2
-        endW, endH = int(math.floor(0.55 * imgWidth)), int(math.floor(0.55 * imgHeight))
+        endW, endH = int(math.floor(0.3 * imgWidth)), int(math.floor(0.3 * imgHeight))
     
     assert imgHeight >= startV + startH/2 and startV - startH/ 2>= 0, 'Start window too tall compared to given center'
     assert imgWidth >= startU + startW/2 and startU - startW/ 2>= 0, 'Start window too tall compared to given center'
@@ -167,10 +170,10 @@ if __name__ == '__main__':
 
     if inpaint_depth:
         ken_burn_pipe = Pipeline(model_paths=[estim_path, refine_path, inpaint_path, inpaint_depth_path], 
-                                dolly=dolly, output_frames=output_frames, pretrain=pretrained_refine)
+                                dolly=dolly, output_frames=output_frames, pretrain=pretrained_refine, d2=d2)
     else:
         ken_burn_pipe = Pipeline(model_paths=[estim_path, refine_path, inpaint_path], 
-                                dolly=dolly, output_frames=output_frames, pretrain=pretrained_refine)
+                                dolly=dolly, output_frames=output_frames, pretrain=pretrained_refine, d2=d2)
 
 
     # ken_burn_pipe = Pipeline()

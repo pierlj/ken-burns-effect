@@ -182,8 +182,8 @@ def process_kenburns(objectSettings, objectCommon, moduleInpaint):
 			dblTo = 1.0 - dblFrom
 
 			if objectSettings['dolly']:
-				focalScaling = objectSettings['objectTo']['intCropWidth'] / objectSettings['objectFrom']['intCropWidth']
-				currentFocal = objectCommon['dblFocal'] * (1 - dblStep) + dblStep * objectCommon['dblFocal'] * focalScaling
+				focalScaling =  objectSettings['objectTo']['intCropWidth'] / objectSettings['objectFrom']['intCropWidth']
+				currentFocal =  objectCommon['dblFocal'] * (1 - dblStep) + dblStep * objectCommon['dblFocal'] * focalScaling
 			else:
 				currentFocal = objectCommon['dblFocal']
 
@@ -213,7 +213,8 @@ def process_kenburns(objectSettings, objectCommon, moduleInpaint):
 			
 			tensorExisting = (tensorExisting > 0.0).float()
 
-			process_inpaint(1.1 * tensorShift, objectCommon, moduleInpaint, currentFocal)
+			if not objectSettings['dolly']:
+				process_inpaint(1.1 * tensorShift, objectCommon, moduleInpaint, currentFocal)
 		# end
 	# end
 
@@ -221,8 +222,8 @@ def process_kenburns(objectSettings, objectCommon, moduleInpaint):
 		dblFrom = 1.0 - dblStep
 		dblTo = 1.0 - dblFrom
 		if objectSettings['dolly']:
-			focalScaling = objectSettings['objectTo']['intCropWidth'] / objectSettings['objectFrom']['intCropWidth']
-			currentFocal = objectCommon['dblFocal'] * (1 - dblStep) + dblStep * objectCommon['dblFocal'] * focalScaling
+			focalScaling =  objectSettings['objectTo']['intCropWidth'] / objectSettings['objectFrom']['intCropWidth']
+			currentFocal =  objectCommon['dblFocal'] * (1 - dblStep) + dblStep * objectCommon['dblFocal'] * focalScaling
 		else:
 			currentFocal = objectCommon['dblFocal']
 		dblShiftU = ((dblFrom * objectSettings['objectFrom']['dblCenterU']) + (dblTo * objectSettings['objectTo']['dblCenterU'])) - (objectCommon['intWidth'] / 2.0)

@@ -21,14 +21,15 @@ from utils.utils import device, load_models, resize_image
 
 
 class Pipeline():
-    def __init__(self, model_paths=None, partial_inpainting=False, dolly=False, output_frames=False, pretrain=False):
+    def __init__(self, model_paths=None, partial_inpainting=False, dolly=False, output_frames=False, pretrain=False, d2=False):
         self.objectCommon = {}
         self.objectCommon['dblFocal'] = 1024.0/2
-        self.objectCommon['dblBaseline'] = 74
+        self.objectCommon['dblBaseline'] = 120
 
         self.partial_inpainting = partial_inpainting
         self.dolly = dolly
         self.output_frames = output_frames
+        self.d2 = d2
 
         self.moduleSemantics = Semantics().to(device).eval()
         self.moduleDisparity = Disparity().to(device).eval()
@@ -71,7 +72,8 @@ class Pipeline():
         tensorResized = resize_image(tensorImage, max_size=int(max(self.objectCommon['intWidth'], self.objectCommon['intHeight'])/2))
 
         tensorDisparity = self.moduleDisparity(tensorResized, self.moduleSemantics(tensorResized))  # depth estimation
-
+        if self.d2:
+            tensorDisparity = torch.ones_like(tensorDisparity)
 
         tensorDisparity = self.moduleRefine(tensorImage, tensorDisparity) # increase resolution
         if tensorDisparity.min() < 0.0:
