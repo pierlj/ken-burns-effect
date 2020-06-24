@@ -4,7 +4,7 @@ This repository contains code for generating 3D Ken Burns effect from single ima
 
 We provide code for the training of the different neural networks used to achieve the 3D Ken Burns effect. In addition we propose some extension of the original work, to improve both the depth estimation and the image inpainting. Finally, we develop an semi-supervised method for the disocclusion inpainting problem in order to prevent the difficulty of getting a synthetic dataset as used in the original paper. We also proposed a slight modification of the 3D KBE to produce fake [dolly zoom](https://en.wikipedia.org/wiki/Dolly_zoom). 
 
-Here is a [video](https://www.youtube.com/watch?v=nSZrJOJFj9o) to some of our results.
+Here is a [video](https://www.youtube.com/watch?v=nSZrJOJFj9o) to some of our results. Our trained networks can be downloaded by running `./donwload.sh`. 
 
 ## [Generate 3D Ken Burns effects](https://www.youtube.com/watch?v=nSZrJOJFj9o)
 ![](https://github.com/ipeter50/ken-burns-effect/blob/master/images/3D_Ken_Burns_effect.gif)
@@ -29,6 +29,10 @@ To generate 3D KBE use the script `kbe.py`. Some parameters can be set to change
     * `startH=`: height of the starting crop window
     * `endW=`: width of the ending crop window
     * `endH=`: height of the ending crop window
+    
+* Other parameters:
+    * `write-frames`: output frames of the video in high quality in a separate folder
+    * `2d`: perform the 2D Ken Burns effect
 
 If some of the cropping windows parameters are not specified, default parameters will be applied. 
 
@@ -85,4 +89,7 @@ Note that some adjustment may also be required in the data loading file (`data_l
 
 **Important notes** 
 - It is important to set properly the `CUDA_HOME` variable according to your system so that CUDA kernels can be executed.
-- It is highly recommended to run these scripts on a GPU. Minimum recommended memory would be 6 GB. 
+- It is highly recommended to run these scripts on a GPU. Minimum recommended memory would be 6 GB.
+- Dependencies: `PyTorch=1.3.1`, `torchvision`, `kornia=0.3.0`, `cupy`, `h5py`, `opencv`, `dill` and `moviepy`.
+
+**[Link to my thesis.](https://drive.google.com/file/d/1H1NS4E41A390AlSg8GVHwZfY5oXgVi8e/view?usp=sharing)**
