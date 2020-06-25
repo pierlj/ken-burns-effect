@@ -4,12 +4,14 @@ This repository contains code for generating 3D Ken Burns effect from single ima
 
 We provide code for the training of the different neural networks used to achieve the 3D Ken Burns effect. In addition we propose some extension of the original work, to improve both the depth estimation and the image inpainting. Finally, we develop an semi-supervised method for the disocclusion inpainting problem in order to prevent the difficulty of getting a synthetic dataset as used in the original paper. We also proposed a slight modification of the 3D KBE to produce fake [dolly zoom](https://en.wikipedia.org/wiki/Dolly_zoom). 
 
-Here is a [video](https://www.youtube.com/watch?v=nSZrJOJFj9o) to some of our results. Our trained networks can be downloaded by running `./donwload.sh`. 
+Here is a [video](https://www.youtube.com/watch?v=nSZrJOJFj9o) with some of our results. 
 
 ## [Generate 3D Ken Burns effects](https://www.youtube.com/watch?v=nSZrJOJFj9o)
 ![](https://github.com/ipeter50/ken-burns-effect/blob/master/images/3D_Ken_Burns_effect.gif)
 
-To generate 3D KBE use the script `kbe.py`. Some parameters can be set to change from default settings. If no path for the networks are specified, default names and paths from donwload script will be used.
+First download our trained networks by running `./donwload.sh` from the directory where the repository has been cloned.
+
+Then generate 3D KBE with the script `kbe.py`. Some parameters can be set to change from default settings. If no path for the networks are specified, default names and paths from donwload script will be used.
 * Selection of the input image and the networks to be used:
     * `in=`: path to input image
     * `out=`: saving path
