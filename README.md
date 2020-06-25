@@ -6,12 +6,14 @@ We provide code for the training of the different neural networks used to achiev
 
 Here is a [video](https://www.youtube.com/watch?v=nSZrJOJFj9o) with some of our results. 
 
+### Download trained networks
+First download our trained networks by running `./donwload.sh` from the directory where the repository has been cloned.
+Note that you might need to make that script executable with `chmod +x download.sh`. 
+
 ## [Generate 3D Ken Burns effects](https://www.youtube.com/watch?v=nSZrJOJFj9o)
 ![](https://github.com/ipeter50/ken-burns-effect/blob/master/images/3D_Ken_Burns_effect.gif)
 
-First download our trained networks by running `./donwload.sh` from the directory where the repository has been cloned.
-
-Then generate 3D KBE with the script `kbe.py`. Some parameters can be set to change from default settings. If no path for the networks are specified, default names and paths from donwload script will be used.
+To generate 3D KBE, use the script `kbe.py`. Some parameters can be set to change from default settings. If no path for the networks are specified, default names and paths from donwload script will be used.
 * Selection of the input image and the networks to be used:
     * `in=`: path to input image
     * `out=`: saving path
