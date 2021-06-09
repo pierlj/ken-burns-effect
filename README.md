@@ -40,7 +40,7 @@ To generate 3D KBE, use the script `kbe.py`. Some parameters can be set to chang
 
 If some of the cropping windows parameters are not specified, default parameters will be applied. 
 
-This will create a video of the 3D KBE but frames of that video can be outputed as well with option `--wrtie-frames`
+This will create a video of the 3D KBE but frames of that video can be outputed as well with option `--write-frames`
 
 Example:
 ```
