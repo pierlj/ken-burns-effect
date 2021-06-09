@@ -11,6 +11,7 @@ from models.disparity_refinement import Refine
 
 cuda = torch.cuda.is_available()
 device = "cuda:0" if cuda else "cpu"
+path_to_math_helper = '/home/s182169/Master_thesis/GAN-Burns-effect/utils/helper_math.h'
 
 def process_load(numpyImage, objectSettings, objectCommon):
 	objectCommon['dblFocal'] = 1024 / 2.0
@@ -269,7 +270,7 @@ class Stream:
 
 def preprocess_kernel(strKernel, objectVariables):
 	strKernel = '''
-		#include </home/s182169/Master_thesis/GAN-Burns-effect/utils/helper_math.h>
+		#include <{}>
 
 		__device__ __forceinline__ float atomicMin(const float* buffer, float dblValue) {
 			int intValue = __float_as_int(*buffer);
@@ -291,7 +292,7 @@ def preprocess_kernel(strKernel, objectVariables):
 
 			return __int_as_float(intValue);
 		}
-	''' + strKernel
+	'''.format(path_to_math_helper) + strKernel
 
 	for strVariable in objectVariables:
 		objectValue = objectVariables[strVariable]
