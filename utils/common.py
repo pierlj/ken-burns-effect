@@ -270,7 +270,7 @@ class Stream:
 
 def preprocess_kernel(strKernel, objectVariables):
 	strKernel = '''
-		#include <{0}>
+		#include <{{HELPER_PATH}}>
 
 		__device__ __forceinline__ float atomicMin(const float* buffer, float dblValue) {
 			int intValue = __float_as_int(*buffer);
@@ -292,7 +292,7 @@ def preprocess_kernel(strKernel, objectVariables):
 
 			return __int_as_float(intValue);
 		}
-	'''.format(path_to_math_helper) + strKernel
+	'''.replace('{{HELPER_PATH}}', path_to_math_helper) + strKernel
 
 	for strVariable in objectVariables:
 		objectValue = objectVariables[strVariable]
